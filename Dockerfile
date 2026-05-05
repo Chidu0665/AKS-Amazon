@@ -8,14 +8,14 @@
 FROM maven:3.9.6-eclipse-temurin-17-alpine AS builder
 WORKDIR /build
 
-COPY Amazon/pom.xml .
-COPY Amazon/Amazon-Core/pom.xml Amazon-Core/pom.xml
-COPY Amazon/Amazon-Web/pom.xml  Amazon-Web/pom.xml
+COPY /pom.xml .
+COPY /Amazon-Core/pom.xml Amazon-Core/pom.xml
+COPY /Amazon-Web/pom.xml  Amazon-Web/pom.xml
 
 RUN mvn dependency:go-offline -B -q
 
-COPY Amazon/Amazon-Core/src Amazon-Core/src
-COPY Amazon/Amazon-Web/src  Amazon-Web/src
+COPY /Amazon-Core/src Amazon-Core/src
+COPY /Amazon-Web/src  Amazon-Web/src
 
 RUN mvn clean package -DskipTests -B && \
     echo "=== Build Output ===" && \
@@ -39,10 +39,10 @@ RUN groupadd -r tomcatgroup && \
     chown -R tomcatuser:tomcatgroup /usr/local/tomcat
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-  CMD curl -fs http://localhost:8080/ || exit 1
+  CMD curl -fs http://localhost:8085/ || exit 1
 
 USER tomcatuser
-EXPOSE 8080
+EXPOSE 8085
 
 # FIXED: removed HTTP hyperlinks, plain string values
 ENV JAVA_OPTS="-XX:+UseContainerSupport \
