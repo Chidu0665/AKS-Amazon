@@ -6,14 +6,10 @@ metadata:
   labels:
     app: amazon-app
 data:
-  # Application settings
-  APP_ENV:          "production"
-  APP_PORT:         "8080"
-  LOG_LEVEL:        "INFO"
-
-  # JVM tuning
-  JAVA_OPTS:        "-Xms256m -Xmx512m -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0"
-
-  # Spring Boot Actuator endpoints (used by probes)
-  MANAGEMENT_PORT:  "8081"
-  ACTUATOR_PATH:    "/actuator"
+  APP_ENV:    "production"
+  APP_PORT:   "8080"
+  LOG_LEVEL:  "INFO"
+  # FIXED: removed MANAGEMENT_PORT and ACTUATOR_PATH —
+  # this is a plain JSP/Servlet app on Tomcat, no Spring Actuator.
+  # All probes hit / on port 8080 (matches deployment.yaml probes).
+  JAVA_OPTS:  "-Xms256m -Xmx512m -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0"
