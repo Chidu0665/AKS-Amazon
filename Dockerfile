@@ -42,7 +42,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
   CMD curl -fs http://localhost:8085/ || exit 1
 
 USER tomcatuser
-EXPOSE 8085
+EXPOSE 8080
 
 # FIXED: removed HTTP hyperlinks, plain string values
 ENV JAVA_OPTS="-XX:+UseContainerSupport \
