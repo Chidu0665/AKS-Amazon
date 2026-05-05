@@ -132,7 +132,7 @@ pipeline {
                 withCredentials([file(credentialsId: 'kubeconfig-aks', variable: 'KUBECONFIG')]) {
                     sh """
                         echo "=== Substituting image placeholder ==="
-                        sed -i 's|DOCKER_IMAGE_PLACEHOLDER|ChiduACR.azurecr.io/${IMAGE_NAME}:571|g' k8s/deployment.yaml
+                        sed -i "s|DOCKER_IMAGE_PLACEHOLDER|${FULL_IMAGE}|g" k8s/deployment.yaml
         
                         echo "=== Verifying substitution ==="
                         grep 'image:' k8s/deployment.yaml
