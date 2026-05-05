@@ -50,4 +50,4 @@ ENV JAVA_OPTS="-XX:+UseContainerSupport \
                -Djava.security.egd=file:/dev/./urandom \
                -Dfile.encoding=UTF-8"
 
-CMD ["catalina.sh", "run"]
+CMD ["catalina.sh", "start"]
