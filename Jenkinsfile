@@ -47,7 +47,7 @@ pipeline {
             steps {
                 checkout scm
                 script {
-                    docker.build("${IMAGE_NAME}:${IMAGE_TAG}",'-f Dockerfile .')
+                    docker.build("${IMAGE_NAME}:${IMAGE_TAG}", "--no-cache -f Dockerfile .")
                     // docker.build("${IMAGE_NAME}:${IMAGE_TAG}","--platform=linux/amd64 -f Dockerfile .")
                 }
             }
