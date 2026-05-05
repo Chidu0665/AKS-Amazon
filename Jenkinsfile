@@ -2,14 +2,18 @@ pipeline {
     agent none
 
     environment {
+        // ── JFrog (archive only) ───────────────────────
         JFROG_URL      = 'http://20.219.37.20:8082/artifactory'
         JFROG_REPO     = 'amazon-generic-local'
-        // FIXED: added FULL_IMAGE so deployment.yaml sed works
-        // JFrog Docker repo must be type=Docker (or use generic tar pull below)
+
+        // ── ACR (AKS pulls from here) ──────────────────
+        ACR_REGISTRY   = 'ChiduACR.azurecr.io'          // ADDED
+
+        // ── Image config ───────────────────────────────
         IMAGE_NAME     = 'amazon-app'
         IMAGE_TAG      = "${env.BUILD_NUMBER}"
         TAR_FILE       = "${IMAGE_NAME}-${IMAGE_TAG}.tar"
-        FULL_IMAGE     = "20.219.37.20:8082/amazon-docker-local/${IMAGE_NAME}:${IMAGE_TAG}"
+        FULL_IMAGE     = "ChiduACR.azurecr.io/${IMAGE_NAME}:${IMAGE_TAG}"  // CHANGED: was JFrog Docker path
         K8S_NAMESPACE  = 'amazon'
     }
 
@@ -29,24 +33,32 @@ pipeline {
         }
 
         // ──────────────────────────────────────────────
-        // STAGE 2: Push to JFrog
-        // — tar to Generic repo (audit/archive copy)
-        // — also push to Docker repo (so AKS can pull it)
+        // STAGE 2: Save tar → JFrog Generic (archive)
+        //          Push image → ACR (AKS pulls from here)
         // ──────────────────────────────────────────────
-        stage('Push to JFrog') {
+        stage('Push Artifact & Image') {                 // RENAMED for clarity
             agent { label 'macos-docker' }
             steps {
-                withCredentials([usernamePassword(
-                    credentialsId: 'jfrog-creds',
-                    usernameVariable: 'JFROG_USER',
-                    passwordVariable: 'JFROG_PASS'
-                )]) {
+                withCredentials([
+                    usernamePassword(
+                        credentialsId: 'jfrog-creds',
+                        usernameVariable: 'JFROG_USER',
+                        passwordVariable: 'JFROG_PASS'
+                    ),
+                    usernamePassword(                     // ADDED: ACR credential block
+                        credentialsId: 'acr-creds',
+                        usernameVariable: 'ACR_USER',
+                        passwordVariable: 'ACR_PASS'
+                    )
+                ]) {
                     sh """
-                        echo "=== Saving Docker image as tar (generic archive) ==="
+                        # ── 1. Save image as tar ──────────────────────────────
+                        echo "=== Saving image as tar ==="
                         docker save ${IMAGE_NAME}:${IMAGE_TAG} -o ${TAR_FILE}
                         ls -lh ${TAR_FILE}
 
-                        echo "=== Uploading tar to JFrog Generic Repository ==="
+                        # ── 2. Upload tar to JFrog Generic (audit archive) ────
+                        echo "=== Uploading tar to JFrog Generic repo ==="
                         curl -u ${JFROG_USER}:${JFROG_PASS} \
                             -X PUT \
                             "${JFROG_URL}/${JFROG_REPO}/${IMAGE_NAME}/${TAR_FILE}" \
@@ -54,23 +66,35 @@ pipeline {
                             --progress-bar \
                             -w "\\nHTTP Status: %{http_code}\\n"
 
-                        echo "=== Verifying tar upload ==="
-                        curl -u ${JFROG_USER}:${JFROG_PASS} \
+                        echo "=== Verifying tar in JFrog ==="
+                        curl -s -u ${JFROG_USER}:${JFROG_PASS} \
                             "${JFROG_URL}/api/storage/${JFROG_REPO}/${IMAGE_NAME}/${TAR_FILE}" \
                             | python3 -m json.tool
 
-                        echo "=== Pushing image to JFrog Docker Repository (for AKS pull) ==="
-                        docker login 20.219.37.20:8082 \
-                            -u ${JFROG_USER} -p ${JFROG_PASS}
-                        docker tag  ${IMAGE_NAME}:${IMAGE_TAG} ${FULL_IMAGE}
+                        # ── 3. Push image to ACR (what AKS actually pulls) ────
+                        echo "=== Logging in to ACR ==="
+                        docker login ${ACR_REGISTRY} \
+                            -u ${ACR_USER} \
+                            -p ${ACR_PASS}
+
+                        echo "=== Tagging image for ACR ==="
+                        docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${FULL_IMAGE}
+
+                        echo "=== Pushing image to ACR ==="
                         docker push ${FULL_IMAGE}
 
+                        echo "=== Verifying image in ACR ==="
+                        curl -s -u ${ACR_USER}:${ACR_PASS} \
+                            https://${ACR_REGISTRY}/v2/${IMAGE_NAME}/tags/list
+
+                        # ── 4. Cleanup ────────────────────────────────────────
                         echo "=== Cleaning up local files ==="
                         rm -f ${TAR_FILE}
                         docker rmi ${IMAGE_NAME}:${IMAGE_TAG} ${FULL_IMAGE} || true
 
-                        echo "=== Artifact URL ==="
-                        echo "${JFROG_URL}/${JFROG_REPO}/${IMAGE_NAME}/${TAR_FILE}"
+                        echo "=== Summary ==="
+                        echo "JFrog archive : ${JFROG_URL}/${JFROG_REPO}/${IMAGE_NAME}/${TAR_FILE}"
+                        echo "ACR image     : ${FULL_IMAGE}"
                     """
                 }
             }
@@ -99,7 +123,7 @@ spec:
                 container('kubectl') {
                     withCredentials([file(credentialsId: 'kubeconfig-aks', variable: 'KUBECONFIG')]) {
                         sh """
-                            echo "=== Substituting image in deployment.yaml ==="
+                            echo "=== Substituting image placeholder ==="
                             sed -i 's|DOCKER_IMAGE_PLACEHOLDER|${FULL_IMAGE}|g' k8s/deployment.yaml
 
                             echo "=== Verifying substitution ==="
@@ -123,8 +147,8 @@ spec:
         }
 
         // ──────────────────────────────────────────────
-        // STAGE 4: Confirm deployment then destroy k8s pod
-        // (pod auto-destroys when stage ends — this just logs state)
+        // STAGE 4: Confirm deployment
+        // k8s plugin pod auto-destroys after Stage 3 ends
         // ──────────────────────────────────────────────
         stage('Confirm & Cleanup') {
             agent { label 'azure-vm' }
@@ -145,9 +169,6 @@ spec:
         }
     }
 
-    // ──────────────────────────────────────────────
-    // POST: Email notifications
-    // ──────────────────────────────────────────────
     post {
         success {
             mail(
@@ -158,8 +179,8 @@ Build Status:  SUCCESS
 Job:           ${env.JOB_NAME}
 Build Number:  #${env.BUILD_NUMBER}
 Branch:        ${env.GIT_BRANCH}
-Image:         ${env.FULL_IMAGE}
-Artifact:      ${env.JFROG_URL}/${env.JFROG_REPO}/${env.IMAGE_NAME}/${env.IMAGE_NAME}-${env.IMAGE_TAG}.tar
+ACR Image:     ${env.FULL_IMAGE}
+JFrog Tar:     ${env.JFROG_URL}/${env.JFROG_REPO}/${env.IMAGE_NAME}/${env.IMAGE_NAME}-${env.IMAGE_TAG}.tar
 Duration:      ${currentBuild.durationString}
 
 View build:    ${env.BUILD_URL}
