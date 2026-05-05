@@ -23,7 +23,7 @@ pipeline {
         // STAGE 1: Build Docker image on macOS Docker slave
         // ──────────────────────────────────────────────
         stage('Build Docker Image') {
-            agent { label 'macos-docker' }
+            agent { label 'azure-vm-agent' }
             steps {
                 checkout scm
                 script {
@@ -37,7 +37,7 @@ pipeline {
         //          Push image → ACR (AKS pulls from here)
         // ──────────────────────────────────────────────
         stage('Push Artifact & Image') {                 // RENAMED for clarity
-            agent { label 'macos-docker' }
+            agent { label 'azure-vm-agent' }
             steps {
                 withCredentials([
                     usernamePassword(
@@ -106,7 +106,7 @@ pipeline {
         stage('Deploy to AKS') {
             agent {
                 kubernetes {
-                    label 'k8s-deploy-pod'
+                    label 'azure-vm-agent'
                     yaml """
 apiVersion: v1
 kind: Pod
@@ -151,7 +151,7 @@ spec:
         // k8s plugin pod auto-destroys after Stage 3 ends
         // ──────────────────────────────────────────────
         stage('Confirm & Cleanup') {
-            agent { label 'azure-vm' }
+            agent { label 'azure-vm-agent' }
             steps {
                 withCredentials([file(credentialsId: 'kubeconfig-aks', variable: 'KUBECONFIG')]) {
                     sh """
