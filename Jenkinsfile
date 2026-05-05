@@ -22,16 +22,36 @@ pipeline {
         // ──────────────────────────────────────────────
         // STAGE 1: Build Docker image on macOS Docker slave
         // ──────────────────────────────────────────────
+
         stage('Build Docker Image') {
             agent { label 'azure-vm-agent' }
+
             steps {
                 checkout scm
-                script {
-                    // docker.build("${IMAGE_NAME}:${IMAGE_TAG}", '--platform=linux/amd64','-f Dockerfile .')
-                    docker.build("${IMAGE_NAME}:${IMAGE_TAG}","--platform=linux/amd64 -f Dockerfile .")
-                }
+
+                sh '''
+                echo "=== Enabling buildx ==="
+                docker buildx create --use || true
+        
+                echo "=== Building amd64 image ==="
+                docker buildx build \
+                  --platform linux/amd64 \
+                  -t ${IMAGE_NAME}:${IMAGE_TAG} \
+                  -f Dockerfile . \
+                  --push
+                '''
             }
         }
+        // stage('Build Docker Image') {
+        //     agent { label 'azure-vm-agent' }
+        //     steps {
+        //         checkout scm
+        //         script {
+        //             // docker.build("${IMAGE_NAME}:${IMAGE_TAG}", '--platform=linux/amd64','-f Dockerfile .')
+        //             docker.build("${IMAGE_NAME}:${IMAGE_TAG}","--platform=linux/amd64 -f Dockerfile .")
+        //         }
+        //     }
+        // }
 
         // ──────────────────────────────────────────────
         // STAGE 2: Save tar → JFrog Generic (archive)
