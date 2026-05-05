@@ -23,35 +23,35 @@ pipeline {
         // STAGE 1: Build Docker image on macOS Docker slave
         // ──────────────────────────────────────────────
 
-        stage('Build Docker Image') {
-            agent { label 'azure-vm-agent' }
-
-            steps {
-                checkout scm
-
-                sh '''
-                echo "=== Enabling buildx ==="
-                docker buildx create --use || true
-        
-                echo "=== Building amd64 image ==="
-                docker buildx build \
-                  --platform linux/amd64 \
-                  -t ${IMAGE_NAME}:${IMAGE_TAG} \
-                  -f Dockerfile . \
-                  --push
-                '''
-            }
-        }
         // stage('Build Docker Image') {
         //     agent { label 'azure-vm-agent' }
+
         //     steps {
         //         checkout scm
-        //         script {
-        //             // docker.build("${IMAGE_NAME}:${IMAGE_TAG}", '--platform=linux/amd64','-f Dockerfile .')
-        //             docker.build("${IMAGE_NAME}:${IMAGE_TAG}","--platform=linux/amd64 -f Dockerfile .")
-        //         }
+
+        //         sh '''
+        //         echo "=== Enabling buildx ==="
+        //         docker buildx create --use || true
+        
+        //         echo "=== Building amd64 image ==="
+        //         docker buildx build \
+        //           --platform linux/amd64 \
+        //           -t ${IMAGE_NAME}:${IMAGE_TAG} \
+        //           -f Dockerfile . \
+        //           --push
+        //         '''
         //     }
         // }
+        stage('Build Docker Image') {
+            agent { label 'azure-vm-agent' }
+            steps {
+                checkout scm
+                script {
+                    docker.build("${IMAGE_NAME}:${IMAGE_TAG}",'-f Dockerfile .')
+                    // docker.build("${IMAGE_NAME}:${IMAGE_TAG}","--platform=linux/amd64 -f Dockerfile .")
+                }
+            }
+        }
 
         // ──────────────────────────────────────────────
         // STAGE 2: Save tar → JFrog Generic (archive)
@@ -132,7 +132,7 @@ pipeline {
                 withCredentials([file(credentialsId: 'kubeconfig-aks', variable: 'KUBECONFIG')]) {
                     sh """
                         echo "=== Substituting image placeholder ==="
-                        sed -i 's|DOCKER_IMAGE_PLACEHOLDER|${FULL_IMAGE}|g' k8s/deployment.yaml
+                        sed -i 's|DOCKER_IMAGE_PLACEHOLDER|ChiduACR.azurecr.io/${IMAGE_NAME}:571|g' k8s/deployment.yaml
         
                         echo "=== Verifying substitution ==="
                         grep 'image:' k8s/deployment.yaml
