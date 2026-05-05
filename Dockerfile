@@ -6,6 +6,7 @@
 
 # ── Stage 1: Maven Build ────────────────────────────────
 FROM maven:3.9.6-eclipse-temurin-17-alpine AS builder
+
 WORKDIR /build
 
 COPY /pom.xml .
@@ -30,25 +31,23 @@ RUN rm -rf /usr/local/tomcat/webapps/ROOT \
            /usr/local/tomcat/webapps/host-manager \
            /usr/local/tomcat/webapps/manager
 
-# FIXED: corrected path — Maven multi-module puts WAR in Amazon-Web/target
 COPY --from=builder /build/Amazon-Web/target/*.war \
      /usr/local/tomcat/webapps/ROOT.war
 
 RUN groupadd -r tomcatgroup && \
-    useradd  -r -g tomcatgroup -d /usr/local/tomcat -s /bin/false tomcatuser && \
+    useradd -r -g tomcatgroup -d /usr/local/tomcat -s /bin/bash tomcatuser && \
     chown -R tomcatuser:tomcatgroup /usr/local/tomcat
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-  CMD curl -fs http://localhost:8085/ || exit 1
+    CMD curl -fs http://localhost:8080/ || exit 1
 
 USER tomcatuser
+
 EXPOSE 8080
 
-# FIXED: removed HTTP hyperlinks, plain string values
 ENV JAVA_OPTS="-XX:+UseContainerSupport \
                -XX:MaxRAMPercentage=75.0 \
                -Djava.security.egd=file:/dev/./urandom \
                -Dfile.encoding=UTF-8"
 
-# FIXED: plain string, no hyperlink
 CMD ["catalina.sh", "run"]
