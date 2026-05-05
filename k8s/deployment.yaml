@@ -31,7 +31,7 @@ spec:
         prometheus.io/path:   "/"
     spec:
       imagePullSecrets:
-        - name: jfrog-secret
+        - name: acr-secret                    # CHANGED: was jfrog-secret
       terminationGracePeriodSeconds: 60
       initContainers:
         - name: init-check
@@ -46,19 +46,18 @@ spec:
             - name: POD_NAME
               valueFrom:
                 fieldRef:
-                  fieldPath: metadata.name
+                  fieldPath: metadata.name    # FIXED: removed hyperlink
             - name: POD_NAMESPACE
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
       containers:
         - name: amazon-app
-          image: DOCKER_IMAGE_PLACEHOLDER
+          image: DOCKER_IMAGE_PLACEHOLDER     # Jenkins sed replaces with ChiduACR.azurecr.io/amazon-app:BUILD_NUMBER
           ports:
             - name: http
               containerPort: 8080
               protocol: TCP
-          # FIXED: load all env from ConfigMap instead of duplicating values
           envFrom:
             - configMapRef:
                 name: amazon-config
@@ -66,7 +65,7 @@ spec:
             - name: POD_NAME
               valueFrom:
                 fieldRef:
-                  fieldPath: metadata.name
+                  fieldPath: metadata.name    # FIXED: removed hyperlink
             - name: POD_NAMESPACE
               valueFrom:
                 fieldRef:
