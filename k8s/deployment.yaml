@@ -20,7 +20,6 @@ spec:
     rollingUpdate:
       maxSurge: 1
       maxUnavailable: 0
-
   template:
     metadata:
       labels:
@@ -30,14 +29,11 @@ spec:
         prometheus.io/scrape: "true"
         prometheus.io/port:   "8080"
         prometheus.io/path:   "/health"
-
     spec:
-      # ── ACR pull secret ────────────────────────────────
+      # ── JFrog pull secret (replaces acr-secret) ────────
       imagePullSecrets:
-        - name: acr-secret
-
+        - name: jfrog-secret                  # CHANGED: was acr-secret
       terminationGracePeriodSeconds: 60
-
       # ── Init container ─────────────────────────────────
       initContainers:
         - name: init-check
@@ -52,26 +48,23 @@ spec:
             - name: POD_NAME
               valueFrom:
                 fieldRef:
-                  fieldPath: metadata.name
+                  fieldPath: metadata.name      # FIXED: removed hyperlink
             - name: POD_NAMESPACE
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.namespace
-
       containers:
         - name: amazon-app
-          image: ChiduACR.azurecr.io/amazon-app:latest
-
+          image: DOCKER_IMAGE_PLACEHOLDER       # CHANGED: Jenkins replaces this at deploy time
           ports:
             - name: http
               containerPort: 8080
               protocol: TCP
-
           env:
             - name: POD_NAME
               valueFrom:
                 fieldRef:
-                  fieldPath: metadata.name
+                  fieldPath: metadata.name      # FIXED: removed hyperlink
             - name: POD_NAMESPACE
               valueFrom:
                 fieldRef:
@@ -86,7 +79,6 @@ spec:
                   fieldPath: spec.nodeName
             - name: JAVA_OPTS
               value: "-Xms256m -Xmx512m -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0"
-
           # ── Relaxed resource limits for small cluster ──
           resources:
             requests:
@@ -95,13 +87,6 @@ spec:
             limits:
               cpu:    "500m"
               memory: "768Mi"
-
-          # ─────────────────────────────────────────────────────
-          # PROBE 1 — STARTUP PROBE
-          # Checks / (root) instead of /health/live which
-          # does not exist in a plain JSP/Servlet app.
-          # Budget: 60 + (30 × 10) = 360 seconds to start.
-          # ─────────────────────────────────────────────────────
           startupProbe:
             httpGet:
               path:   /
@@ -112,12 +97,6 @@ spec:
             timeoutSeconds:      5
             successThreshold:    1
             failureThreshold:    30
-
-          # ─────────────────────────────────────────────────────
-          # PROBE 2 — LIVENESS PROBE
-          # Restarts container if app becomes unresponsive.
-          # Only activates after startupProbe succeeds.
-          # ─────────────────────────────────────────────────────
           livenessProbe:
             httpGet:
               path:   /
@@ -128,12 +107,6 @@ spec:
             timeoutSeconds:      5
             successThreshold:    1
             failureThreshold:    3
-
-          # ─────────────────────────────────────────────────────
-          # PROBE 3 — READINESS PROBE
-          # Removes pod from LB if not ready to serve traffic.
-          # Pod is NOT restarted on failure — just deregistered.
-          # ─────────────────────────────────────────────────────
           readinessProbe:
             httpGet:
               path:   /
@@ -144,24 +117,20 @@ spec:
             timeoutSeconds:      5
             successThreshold:    1
             failureThreshold:    3
-
           lifecycle:
             preStop:
               exec:
                 command: ["sh", "-c", "sleep 10"]
-
           volumeMounts:
             - name: tmp-dir
               mountPath: /tmp
             - name: log-dir
               mountPath: /app/logs
-
       volumes:
         - name: tmp-dir
           emptyDir: {}
         - name: log-dir
           emptyDir: {}
-
       affinity:
         podAntiAffinity:
           preferredDuringSchedulingIgnoredDuringExecution:
