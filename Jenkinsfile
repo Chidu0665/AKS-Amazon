@@ -103,48 +103,34 @@ pipeline {
         // ──────────────────────────────────────────────
         // STAGE 3: Deploy to AKS via Kubernetes plugin pod
         // ──────────────────────────────────────────────
+
         stage('Deploy to AKS') {
-            agent {
-                kubernetes {
-                    label 'azure-vm-agent'
-                    yaml """
-apiVersion: v1
-kind: Pod
-spec:
-  containers:
-  - name: kubectl
-    image: bitnami/kubectl:latest
-    command: ['cat']
-    tty: true
-"""
-                }
-            }
+            agent { label 'azure-vm-agent' }
+
             steps {
-                container('kubectl') {
-                    withCredentials([file(credentialsId: 'kubeconfig-aks', variable: 'KUBECONFIG')]) {
-                        sh """
-                            echo "=== Substituting image placeholder ==="
-                            sed -i 's|DOCKER_IMAGE_PLACEHOLDER|${FULL_IMAGE}|g' k8s/deployment.yaml
-
-                            echo "=== Verifying substitution ==="
-                            grep 'image:' k8s/deployment.yaml
-
-                            echo "=== Applying manifests ==="
-                            kubectl apply -f k8s/namespace.yaml
-                            kubectl apply -f k8s/configmap.yaml  -n ${K8S_NAMESPACE}
-                            kubectl apply -f k8s/deployment.yaml -n ${K8S_NAMESPACE}
-                            kubectl apply -f k8s/service.yaml    -n ${K8S_NAMESPACE}
-                            kubectl apply -f k8s/ingress.yaml    -n ${K8S_NAMESPACE}
-                            kubectl apply -f k8s/hpa.yaml        -n ${K8S_NAMESPACE}
-
-                            echo "=== Waiting for rollout ==="
-                            kubectl rollout status deployment/amazon-deployment \
-                                -n ${K8S_NAMESPACE} --timeout=180s
-                        """
-                    }
-                }
-            }
+                withCredentials([file(credentialsId: 'kubeconfig-aks', variable: 'KUBECONFIG')]) {
+                    sh """
+                        echo "=== Substituting image placeholder ==="
+                        sed -i 's|DOCKER_IMAGE_PLACEHOLDER|${FULL_IMAGE}|g' k8s/deployment.yaml
+        
+                        echo "=== Verifying substitution ==="
+                        grep 'image:' k8s/deployment.yaml
+        
+                        echo "=== Applying manifests ==="
+                        kubectl apply -f k8s/namespace.yaml
+                        kubectl apply -f k8s/configmap.yaml  -n ${K8S_NAMESPACE}
+                        kubectl apply -f k8s/deployment.yaml -n ${K8S_NAMESPACE}
+                        kubectl apply -f k8s/service.yaml    -n ${K8S_NAMESPACE}
+                        kubectl apply -f k8s/ingress.yaml    -n ${K8S_NAMESPACE}
+                        kubectl apply -f k8s/hpa.yaml        -n ${K8S_NAMESPACE}
+        
+                        echo "=== Waiting for rollout ==="
+                        kubectl rollout status deployment/amazon-deployment \
+                            -n ${K8S_NAMESPACE} --timeout=180s
+                    """
         }
+    }
+}
 
         // ──────────────────────────────────────────────
         // STAGE 4: Confirm deployment
